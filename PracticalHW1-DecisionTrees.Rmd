@@ -30,7 +30,7 @@ Model Implementations:
 
 -   binary classification (has or has not used marijuana)
 
--   multi-class classification (edifferentiate between seldom, sometimes, and frequent marijuana use)
+-   multi-class classification (differentiate between seldom, sometimes, and frequent marijuana use)
 
 -   regression (average age first used marijuana)
 
@@ -39,9 +39,31 @@ Model Implementations:
 ```{r}
 # load cleaned data
 load("youth_data.Rdata")
+```
 
-# Define All Predictor Variables
-vars <- c('IRSEX', 'NEWRACE2', 'HEALTH2', 'EDUSCHLGO', 'EDUSCHGRD2','EDUSKPCOM', 'IMOTHER', 'IFATHER', 'INCOME', 'GOVTPROG','POVERTY3', 'PDEN10', 'COUTYP4', 'MRJFLAG')
+```{r}
+#### renaming variables 
+# all original variable names
+all_original <- c('IRALCFY', 'IRMJFY', 'IRCIGFM', 'IRSMKLSS30N', 'IRALCFM', 'IRMJFM','IRCIGAGE', 'IRSMKLSTRY', 'IRALCAGE', 'IRMJAGE','MRJFLAG', 'ALCFLAG', 'TOBFLAG','ALCYDAYS', 'MRJYDAYS', 'ALCMDAYS', 'MRJMDAYS', 'CIGMDAYS', 'SMKLSMDAYS','IRSEX', 'NEWRACE2', 'HEALTH2', 'EDUSCHLGO', 'EDUSCHGRD2','EDUSKPCOM', 'IMOTHER', 'IFATHER', 'INCOME', 'GOVTPROG','POVERTY3', 'PDEN10', 'COUTYP4')
+
+# renamed variables
+all_new <- c(
+  'alcohol_freq_past_year', 'marijuana_freq_past_year',
+  'cigarette_freq_past_month', 'smokeless_freq_past_month',
+  'alcohol_freq_past_month', 'marijuana_freq_past_month',
+  'cigarette_first_use_age', 'smokeless_first_use_age',
+  'alcohol_first_use_age', 'marijuana_first_use_age',
+  'marijuana_ever_used', 'alcohol_ever_used', 'tobacco_ever_used',
+  'alcohol_days_past_year_cat', 'marijuana_days_past_year_cat',
+  'alcohol_days_past_month_cat', 'marijuana_days_past_month_cat',
+  'cigarette_days_past_month_cat', 'smokeless_days_past_month_cat','sex', 'race_ethnicity', 'self_reported_health', 'currently_in_school','current_grade', 'days_skipped_school', 'mother_in_household','father_in_household', 'household_income', 'govt_assistance','poverty_status', 'population_density', 'metro_status'
+)
+
+# Find which original names exist in df
+existing_indices <- which(all_original %in% names(df))
+
+# Rename only existing columns
+names(df)[match(all_original[existing_indices], names(df))] <- all_new[existing_indices]
 ```
 
 ## Binary Classification - Ever Used Mrj
@@ -50,7 +72,9 @@ To understand factors that influence marijuana use in youths, we can explore pre
 
 The classification tree is fit on 70% of the balanced data set, and tested on 30% of the balanced data. The tree uses basically one predictor variable to determine whether or not a participant has ever used marijuana, if a student is 9th grade or below they have not used marijuana and above 9th grade they have. This simple classification model correctly predicts whether or not a student has used marijuana 64.02% of the time, but prediction is heavily dominated by a students grade level.
 
-To reduce variance in the original model, a random forest approach would consider factors from multiple trees as well as limit the amount of variables considered at each split. By using a random forest approach, factors that affect drug use, other than grade level, could become apparent. This model does a much better job at predicting if participants ever used marijuana, with an increased accuracy of 69.87%. This model can be used to view important factors, but it is also important to note that variable importance identify how much a variable effects prediction, but does not show the direction they might affect the target variable (ie. positive or negative relationships), so we might use background research and logic to determine their impacts. Grade level continues to be an important predictor, suggesting that schools might want to have discussions around preventative drug use and awareness as early as possible. While grade level is still significantly an important predictor, other factors can be important like race and health. This could mean that youth drug awareness should also consider some socio-economic factors like targeting communities that are more exposed to drug usage and warning students with high health risks of potential repercussions.
+To reduce variance in the original model, a random forest and bagging approach would consider factors from multiple trees as well as limit the amount of variables considered at each split. By using a random forest approach, factors that affect drug use, other than grade level, could become apparent. We will test a bagging model using all of the predictor variables at each split with replacement, then using an intermediate number of variables, and a minimum number of variables (1). We plot the errors of all three models to see that the random forest model that limits to three variables at each split has low error while using less computative power, so we will evaluate whether or not a student had used marijuana based on this model. This model does a much better job at predicting if participants ever used marijuana, with an increased accuracy of 69.87%. In this model, we will use accuracy to evaluate the model's performance, as we are interested in what factors contribute to a correct prediction. This can help us infer what factors influence whether or not a student had used or will use marijuana.
+
+This model can be used to view important factors, but it is also important to note that variable importance identify how much a variable effects prediction, but does not show the direction they might affect the target variable (ie. positive or negative relationships), so we might use background research and logic to determine their impacts. Grade level continues to be an important predictor, suggesting that schools might want to have discussions around preventative drug use and awareness as early as possible. While grade level is still significantly an important predictor, other factors can be important like race and health. This could mean that youth drug awareness should also consider some socio-economic factors like targeting communities that are more exposed to drug usage and warning students with high health risks of potential repercussions.
 
 ```{r}
 # install libaries
@@ -59,22 +83,31 @@ library(dplyr)
 library(tidyr)
 
 # Define variables
-vars <- c('IRSEX', 'NEWRACE2', 'HEALTH2', 'EDUSCHGRD2', 'INCOME', 'IMOTHER', 'PDEN10', 'MRJFLAG')
+vars <- c(
+  'sex',                   # IRSEX
+  'race_ethnicity',        # NEWRACE2
+  'self_reported_health',  # HEALTH2
+  'current_grade',         # EDUSCHGRD2
+  'household_income',      # INCOME
+  'mother_in_household',   # IMOTHER
+  'population_density',    # PDEN10
+  'marijuana_ever_used'    # MRJFLAG
+)
 
 # Subset and clean data
 df_tree <- df %>%
   select(all_of(vars)) %>%
   drop_na() %>%
-  mutate(MRJFLAG = as.factor(MRJFLAG))
+  mutate(marijuana_ever_used = as.factor(marijuana_ever_used))
 
 # Data Imbalance 
-table(df_tree$MRJFLAG)
+table(df_tree$marijuana_ever_used)
 
 # Underampling the majoirty class (0)
 library(ROSE)
 set.seed(123) 
-df_balanced <- ovun.sample(MRJFLAG ~ ., data = df_tree, method = "both", N = 3362)$data
-table(df_balanced$MRJFLAG)
+df_balanced <- ovun.sample(marijuana_ever_used ~ ., data = df_tree, method = "both", N = 3362)$data
+table(df_balanced$marijuana_ever_used)
 ```
 
 ```{r}
@@ -84,11 +117,11 @@ train_idx <- sample(1:nrow(df_balanced), nrow(df_balanced)*0.7)
 train <- df_balanced[train_idx, ]
 test <- df_balanced[-train_idx, ]
 
-table(train$MRJFLAG)
+table(train$marijuana_ever_used)
 
 # Fit classification tree
 set.seed(123) 
-mrj_tree <- tree(MRJFLAG ~ ., data = train)
+mrj_tree <- tree(marijuana_ever_used ~ ., data = train)
 
 # Print and plot the tree
 summary(mrj_tree)
@@ -99,10 +132,10 @@ text(mrj_tree, pretty = 0)
 tree_pred <- predict(mrj_tree, newdata = test, type = "class")
 
 # confusion matrix
-table(Predicted = tree_pred, Actual = test$MRJFLAG)
+table(Predicted = tree_pred, Actual = test$marijuana_ever_used)
 
 # accuracy
-mean(tree_pred == test$MRJFLAG)
+mean(tree_pred == test$marijuana_ever_used)
 ```
 
 ```{r}
@@ -121,11 +154,34 @@ text(pruned_tree, pretty = 0)
 
 # Predict again
 pruned_pred <- predict(pruned_tree, test, type = "class")
-mean(pruned_pred == test$MRJFLAG)
+mean(pruned_pred == test$marijuana_ever_used)
 ```
 
 ```{r}
-### Random Forest
+### Bagged Model
+# train test split
+set.seed(123)
+train_idx <- sample(1:nrow(df_balanced), nrow(df_balanced)*0.7)
+train <- df_balanced[train_idx, ]
+test <- df_balanced[-train_idx, ]
+
+# fit bagged model (max variables)
+library(randomForest)
+set.seed(123) 
+all_predictors <-  length(train)-1
+bag_model <- randomForest(marijuana_ever_used~., data = train, mtry = all_predictors, importance = TRUE)
+bag_model
+
+# fit bagged model (min variables)
+library(randomForest)
+set.seed(123) 
+all_predictors <-  length(train)-1
+rf_model_min <- randomForest(marijuana_ever_used~., data = train, mtry = 1, importance = TRUE)
+rf_model_min
+```
+
+```{r}
+### Random Forest (intermediate value)
 # train test split
 set.seed(123)
 train_idx <- sample(1:nrow(df_balanced), nrow(df_balanced)*0.7)
@@ -135,20 +191,41 @@ test <- df_balanced[-train_idx, ]
 # fit random forest model
 library(randomForest)
 set.seed(123) 
-rf_tree <- randomForest(MRJFLAG ~., data = train, mtry = 3, importance = TRUE)
-rf_tree
+rf_model <- randomForest(marijuana_ever_used ~., data = train, mtry = 3, importance = TRUE)
+rf_model
 
 # importance
-importance(rf_tree)
-varImpPlot(rf_tree)
+importance(rf_model)
+varImpPlot(rf_model)
 
 # predict on test data
-yhat.bag <- predict(rf_tree, newdata = test)
-plot(yhat.bag, test$MRJFLAG) # plot points
+yhat.bag <- predict(rf_model, newdata = test)
+plot(yhat.bag, test$marijuana_ever_used) # plot points
 abline(0, 1) # plot regression line
 
 # accuracy
-mean(yhat.bag == test$MRJFLAG)
+mean(yhat.bag == test$marijuana_ever_used)
+
+# mse
+mse <- mean((as.numeric(as.character(yhat.bag)) - as.numeric(as.character(test$marijuana_ever_used)))^2)
+mse
+```
+
+```{r}
+### Comparing errors for different mtry values
+
+# extract OOB errors for each model
+oob_min <- rf_model_min$err.rate[, "OOB"]
+oob_mid <- rf_model$err.rate[, "OOB"]
+oob_bag <- bag_model$err.rate[, "OOB"]
+
+# plot error vs number of trees
+plot(oob_min, type = 'l', col = 'red', lwd = 2, xlab = 'Number of Trees', ylab = 'OOB Error Rate', main = 'OOB Error vs Number of Trees for Different Models', ylim = range(c(oob_min, oob_mid, oob_bag), na.rm = TRUE))
+
+lines(oob_mid, col = 'blue', lwd = 2)
+lines(oob_bag, col = 'green', lwd = 2)
+
+legend("topright", legend = c("rf_model_min", "rf_model", "bag_model"),col = c("red", "blue", "green"), lwd = 2)
 ```
 
 ## Multi-Class: \# days used marijuana in past month
@@ -163,16 +240,26 @@ There is a large data imbalance in our target variable, where most youths are no
 library(tree)
 
 # Define variables
-vars <- c('IRSEX', 'NEWRACE2', 'HEALTH2', 'EDUSCHGRD2', 'INCOME', 'IMOTHER', 'PDEN10', 'MRJMDAYS')
+vars <- c(
+  'sex',                      # IRSEX
+  'race_ethnicity',           # NEWRACE2
+  'self_reported_health',     # HEALTH2
+  'current_grade',            # EDUSCHGRD2
+  'household_income',         # INCOME
+  'mother_in_household',      # IMOTHER
+  'population_density',       # PDEN10
+  'marijuana_days_past_month_cat'  # MRJMDAYS
+)
+
 
 # Subset and clean data
 df_tree <- df %>%
   select(all_of(vars)) %>%
   drop_na() %>%
-  mutate(MRJMDAYS = as.factor(MRJMDAYS))
+  mutate(marijuana_days_past_month_cat = as.factor(marijuana_days_past_month_cat))
 
 # Data Imbalance 
-table(df_tree$MRJMDAYS)
+table(df_tree$marijuana_days_past_month_cat)
   # 1: 1-2 Days
   # 2: 3-5 Days
   # 3: 6-19 Days
@@ -183,8 +270,8 @@ table(df_tree$MRJMDAYS)
 # undersample the majority class (5)
 library(UBL)
 set.seed(123) 
-df_balanced <- RandUnderClassif(MRJMDAYS ~ ., df_tree)
-table(df_balanced$MRJMDAYS)
+df_balanced <- RandUnderClassif(marijuana_days_past_month_cat ~ ., df_tree)
+table(df_balanced$marijuana_days_past_month_cat)
 ```
 
 The following code fits a multi-class classification tree that predicts the number of days youths have used marijuana in the past month, using the specified predictor variables from before. The balanced data is split into a 70% training set that the model is fit to and a 30% test set where predictions are used to test the accuracy of the model.
@@ -201,12 +288,12 @@ train_idx <- sample(1:nrow(df_balanced), nrow(df_balanced)*0.7)
 train <- df_balanced[train_idx, ]
 test <- df_balanced[-train_idx, ]
 
-table(train$MRJMDAYS)
-table(test$MRJMDAYS)
+table(train$marijuana_days_past_month_cat)
+table(test$marijuana_days_past_month_cat)
 
 # Fit classification tree
 set.seed(123) 
-mrj_tree <- tree(MRJMDAYS ~ ., data = train)
+mrj_tree <- tree(marijuana_days_past_month_cat ~ ., data = train)
 
 # Print and plot the tree
 summary(mrj_tree)
@@ -217,19 +304,19 @@ text(mrj_tree, pretty = 0)
 tree_pred <- predict(mrj_tree, newdata = test, type = "class")
 
 # confusion matrix
-table(Predicted = tree_pred, Actual = test$MRJMDAYS)
+table(Predicted = tree_pred, Actual = test$marijuana_days_past_month_cat)
 
 # accuracy
-mean(tree_pred == test$MRJMDAYS)
+mean(tree_pred == test$marijuana_days_past_month_cat)
 ```
 
 After analyzing that most predictions were made for either classes 1 or 5, re-framing the problem might help improve the predictive power of classification trees. Collapsing the categorizes into fewer and more balanced classes, like never used marijuana, occasional use, and frequent use, can help the model pick up more nuances of the data.
 
-To further improve predictions beyond a simple muti-class classification tree, we might consider ensemble methods that can take multiple classification trees and aggregate their solutions to produce a more robust prediction. In this specific case, a random forest method would be helpful in reducing variance of the current model by creating many classification trees using random sampling with replacement, while also limiting the number of variables at each split so our model captures of the nuances in the data.
+To further improve predictions beyond a simple muti-class classification tree, we might consider ensemble methods that can take multiple classification trees and aggregate their solutions to produce a more robust prediction. In this specific case, a random forest or bagging methods would be helpful in reducing variance of the current model by creating many classification trees using random sampling with replacement, while also limiting the number of variables at each split so our model captures of the nuances in the data. We tested three models, a bagging model testing all predictors at each split, a random forest model testing 3 variables at each split, and a random forest model testing the minimum variable at each split.
 
-The following code utilizes the random forest method on a balanced data set to predict the frequency of marijuana use based on the same predictor variables.
+After graphing the errors, we found that the random forest model testing the minimum number of variables has the lowest error and uses less computational power. The following code utilizes the random forest method on a balanced data set to predict the frequency of marijuana use based on the same predictor variables.
 
-The trade off when conducting ensemble methods, is loosing the accessibility of analyzing a decision tree as random forest is unable to produce a visual of an aggregated tree. However the model can still be analyzed on other ways like looking at the error rate or accuracy and identifying significant predictor variables. The random forest model predicts significantly better than the simple classification tree, with an accuracy of 44.83% correct predictions, but still not a strong model. This is an improvement however, as the confusion matrix shows a fair prediction across all frequencies, even doing a good job predicting frequent and occasional users. This model definitely accounts for more of the nuances in the data and brings to light factors that affect frequency of marijuana use.
+The trade off when conducting ensemble methods, is loosing the accessibility of analyzing a decision tree as random forest is unable to produce a visual of an aggregated tree. However the model can still be analyzed on other ways like looking at the error rate or accuracy and identifying significant predictor variables. The random forest model predicts significantly better than the simple classification tree, with an accuracy of 42.90% correct predictions, but still not a strong model. This is an improvement however, as the confusion matrix shows a fair prediction across all frequencies, even doing a good job predicting frequent and occasional users. This model definitely accounts for more of the nuances in the data and brings to light factors that affect frequency of marijuana use. However, this model should be evaluated on the mean squared error performance metric because we are more interested in how far away the class predictions are. When evaluating important factors that affect frequency of use, we want to try to classify each student to a closely but also see what factors are present. Especially since this model is based on ordered classes (never, occasional, and frequent), knowing how far away a classification is will be more useful than whether or not a student is in the correct class. This model predicts with about a 1.5 class error.
 
 Variable importance of the random forest model will highlight demographic or socio-economic factors that may impact the frequency of youth marijuana use. Similarly to the binary classification model, grade level and student health are important factors that determine frequent use. This could be important to highlight in awareness classes that just because drug use may seem more prevalent in higher grades, does not mean giving into peer pressure is the right path forward. Also highlighting the importance of health, not just for high risk students, but also any potential risks that might occur with frequent drug use.
 
@@ -238,15 +325,23 @@ Variable importance of the random forest model will highlight demographic or soc
 # regrouping data
 df <- df %>%
   mutate(MRJMDAYS_CAT = case_when(
-    MRJMDAYS == 5 ~ "Never",
-    MRJMDAYS %in% c(1, 2) ~ "Occasional",
-    MRJMDAYS %in% c(3, 4) ~ "Frequent"
+    marijuana_days_past_month_cat == 5 ~ "Never",
+    marijuana_days_past_month_cat %in% c(1, 2) ~ "Occasional",
+    marijuana_days_past_month_cat %in% c(3, 4) ~ "Frequent"
   )) %>%
   mutate(MRJMDAYS_CAT = factor(MRJMDAYS_CAT))
 table(df$MRJMDAYS_CAT)
 
 # Define variables
-vars <- c('IRSEX', 'NEWRACE2', 'HEALTH2', 'EDUSCHGRD2', 'INCOME', 'IMOTHER', 'PDEN10', 'MRJMDAYS_CAT')
+vars <- c(
+  'sex',                           # IRSEX
+  'race_ethnicity',               # NEWRACE2
+  'self_reported_health',         # HEALTH2
+  'current_grade',                # EDUSCHGRD2
+  'household_income',             # INCOME
+  'mother_in_household',          # IMOTHER
+  'population_density',           # PDEN10
+ 'MRJMDAYS_CAT')
 
 # Subset and clean data
 df_tree <- df %>%
@@ -267,25 +362,61 @@ test <- df_balanced[-train_idx, ]
 
 # fit random forest model
 set.seed(123) 
-rf_tree <- randomForest(MRJMDAYS_CAT ~., data = df_balanced[train_idx,], mtry = 3, importance = TRUE)
-rf_tree
+rf_model <- randomForest(MRJMDAYS_CAT ~., data = df_balanced[train_idx,], mtry = 3, importance = TRUE)
+rf_model
 
+# fit random forest model (minimum variables)
+set.seed(123) 
+rf_model_min <- randomForest(MRJMDAYS_CAT ~., data = df_balanced[train_idx,], mtry = 1, importance = TRUE)
+rf_model_min
+
+# fit random forest model (maximum variables)
+all_predictors <-  length(train)-1
+set.seed(123) 
+bag_model <- randomForest(MRJMDAYS_CAT ~., data = df_balanced[train_idx,], mtry = all_predictors, importance = TRUE)
+bag_model
+```
+
+```{r}
+### Comparing errors for different mtry values
+
+# extract OOB errors for each model
+oob_min <- rf_model_min$err.rate[, "OOB"]
+oob_mid <- rf_model$err.rate[, "OOB"]
+oob_bag <- bag_model$err.rate[, "OOB"]
+
+# plot error vs number of trees
+plot(oob_min, type = 'l', col = 'red', lwd = 2, xlab = 'Number of Trees', ylab = 'OOB Error Rate', main = 'OOB Error vs Number of Trees for Different Models', ylim = range(c(oob_min, oob_mid, oob_bag), na.rm = TRUE))
+
+lines(oob_mid, col = 'blue', lwd = 2)
+lines(oob_bag, col = 'green', lwd = 2)
+
+legend("topright", legend = c("rf_model_min", "rf_model", "bag_model"),col = c("red", "blue", "green"), lwd = 2)
+```
+
+```{r}
 # importance
-importance(rf_tree)
-varImpPlot(rf_tree)
+importance(rf_model_min)
+varImpPlot(rf_model_min)
 
 # predict on test data
-yhat.bag <- predict(rf_tree, newdata = test)
+yhat.bag <- predict(rf_model_min, newdata = test)
 plot(yhat.bag, test$MRJMDAYS_CAT) # plot points
 abline(0, 1) # plot regression line
 
 # accuracy
 mean(yhat.bag == test$MRJMDAYS_CAT)
+
+# mse
+mse <- mean((as.numeric(test$MRJMDAYS_CAT) - as.numeric(yhat.bag))^2)
+mse
+  # measure how far of the predicted class is fomr the actial class (1: never, 2: occasional, 3:frequent)
+  # predictions are on average more than 1 class off (minimum mse of 0, maximum of 4)
 ```
 
 ## Multi-Class: \# days used marijuana in past year
 
-When looking at long term marijuana usage in youths, it might be more effective to analyze predictors that can predict marijuana usage in a year. The following model includes all of the parameters used to analyze marijuana usage in a month, including fewer categories of the target variable, balanced data, and random forest model implementation. The accuracy is significantly higher at 86.95%, and its important to note that the model picks up on some of the nuances of the data but still heavily biased towards predicting no marijuana use among youths.
+When looking at long term marijuana usage in youths, it might be more effective to analyze predictors that can predict marijuana usage in a year. The following model includes all of the parameters used to analyze marijuana usage in a month, including fewer categories of the target variable, balanced data, and random forest model implementation. The mean squared error for this model is similar to the lase mutli-class model predicting with about a 1.33 class error.
 
 Despite the biased predictions of our model, the importance of the variables from this model can still be used to analyze, most likely what predicts no marijuana use among youths, which in turn can be helpful in practicing safe and preventative drug use lessons in school. For monthly usage models, grade level is still an important variable, which tells us educating youths about the repercussions of drug use at a younger age is becoming increasingly important. However, this model shows race and family income are also predictors for long term marijuana usage in youths. We might consider paying special attention towards families with high income that might be able to support the expenses of drug use, as well as communities that revolve around prevalent drug scenes.
 
@@ -294,15 +425,23 @@ Despite the biased predictions of our model, the importance of the variables fro
 # regrouping data
 df <- df %>%
   mutate(MRJYDAYS_CAT = case_when(
-    MRJYDAYS == 6 ~ "Never",
-    MRJYDAYS %in% c(1, 2) ~ "Occasional",
-    MRJYDAYS %in% c(3, 4, 5) ~ "Frequent"
+    marijuana_days_past_year_cat == 6 ~ "Never",
+    marijuana_days_past_year_cat %in% c(1, 2) ~ "Occasional",
+    marijuana_days_past_year_cat %in% c(3, 4, 5) ~ "Frequent"
   )) %>%
   mutate(MRJYDAYS_CAT = factor(MRJYDAYS_CAT))
 table(df$MRJYDAYS_CAT)
 
 # Define variables
-vars <- c('IRSEX', 'NEWRACE2', 'HEALTH2', 'EDUSCHGRD2', 'INCOME', 'IMOTHER', 'PDEN10', 'MRJYDAYS_CAT')
+vars <- c(
+  'sex',                          # IRSEX
+  'race_ethnicity',              # NEWRACE2
+  'self_reported_health',        # HEALTH2
+  'current_grade',               # EDUSCHGRD2
+  'household_income',            # INCOME
+  'mother_in_household',         # IMOTHER
+  'population_density',          # PDEN10
+  'MRJYDAYS_CAT')
 
 # Subset and clean data
 df_tree <- df %>%
@@ -327,17 +466,51 @@ set.seed(123)
 rf_tree <- randomForest(MRJYDAYS_CAT ~., data = train, mtry = 3, importance = TRUE)
 rf_tree
 
+# fit random forest model (minimum variables)
+set.seed(123) 
+rf_model_min <- randomForest(MRJYDAYS_CAT ~., data = train, mtry = 1, importance = TRUE)
+rf_model_min
+
+# fit random forest model (maximum variables)
+all_predictors <-  length(train)-1
+set.seed(123) 
+bag_model <- randomForest(MRJYDAYS_CAT ~., data = train, mtry = all_predictors, importance = TRUE)
+bag_model
+```
+
+```{r}
+### Comparing errors for different mtry values
+
+# extract OOB errors for each model
+oob_min <- rf_model_min$err.rate[, "OOB"]
+oob_mid <- rf_model$err.rate[, "OOB"]
+oob_bag <- bag_model$err.rate[, "OOB"]
+
+# plot error vs number of trees
+plot(oob_min, type = 'l', col = 'red', lwd = 2, xlab = 'Number of Trees', ylab = 'OOB Error Rate', main = 'OOB Error vs Number of Trees for Different Models', ylim = range(c(oob_min, oob_mid, oob_bag), na.rm = TRUE))
+
+lines(oob_mid, col = 'blue', lwd = 2)
+lines(oob_bag, col = 'green', lwd = 2)
+
+legend("topright", legend = c("rf_model_min", "rf_model", "bag_model"),col = c("red", "blue", "green"), lwd = 2)
+```
+
+```{r}
 # importance
-importance(rf_tree)
-varImpPlot(rf_tree)
+importance(rf_model_min)
+varImpPlot(rf_model_min)
 
 # predict on test data
-yhat.bag <- predict(rf_tree, newdata = test)
+yhat.bag <- predict(rf_model_min, newdata = test)
 plot(yhat.bag, test$MRJYDAYS_CAT) # plot points
 abline(0, 1) # plot regression line
 
 # accuracy
 mean(yhat.bag == test$MRJYDAYS_CAT)
+
+# mse
+mse <- mean((as.numeric(test$MRJYDAYS_CAT) - as.numeric(yhat.bag))^2)
+mse
 ```
 
 ## Regression Classification: Age of First Usage
@@ -349,17 +522,24 @@ The following model examines from only students who used marijuana, what factors
 The regression model shows that on the younger side, youths are exposed to marijuana at around 11-12 years old, but 13-14 year olds are more typical perhaps. This result might incline schools to start drug use awareness and safety at around 5th grade and continue to emphasize the importance of awareness through middle and high school.
 
 ```{r}
-### REGRESSION CLASSIFICATION
+### REGRESSION MODEL
 # clean target variable (IRMJAGE)
 df <- df %>%
-  filter(IRMJAGE != 991) %>%  # remove "never used"
-  mutate(IRMJAGE = as.numeric(IRMJAGE)) %>%
+  filter(marijuana_first_use_age != 991) %>%  # remove "never used"
+  mutate(marijuana_first_use_age = as.numeric(marijuana_first_use_age)) %>%
   drop_na() 
 
 # Define variables
-vars <- c('IRSEX', 'NEWRACE2', 'HEALTH2', 'EDUSCHGRD2','INCOME', 'PDEN10', 'IRMJAGE')
+vars <- c(
+  'sex',                     # IRSEX
+  'race_ethnicity',          # NEWRACE2
+  'self_reported_health',    # HEALTH2
+  'current_grade',           # EDUSCHGRD2
+  'household_income',        # INCOME
+  'population_density',      # PDEN10
+  'marijuana_first_use_age'  # IRMJAGE
+)
 
-  
 # Subset and clean data
 df_tree <- df %>%
   select(all_of(vars)) %>%
@@ -373,7 +553,7 @@ test <- df_tree[-train_idx, ]
 
 # fit regression classification
 set.seed(123) 
-reg_tree <- tree(IRMJAGE ~ ., data = train)
+reg_tree <- tree(marijuana_first_use_age ~ ., data = train)
 summary(reg_tree)
 
 # plot regression tree
@@ -394,19 +574,42 @@ text(prune_reg, pretty = 0)
 yhat <- predict(prune_reg, newdata = test)
 
 # rmse
-mse <- mean((yhat - test$IRMJAGE)^2)
+mse <- mean((yhat - test$marijuana_first_use_age)^2)
 sqrt(mse)
 ```
 
-A boosting model can help learn additional nuances of the data, but with an rmse of about the same (1.76 years accuracy), the results are about the same as a simpler model. It would make more sense to use a regular regression classification tree in this scenario.
+A boosting model can help learn additional nuances of the data. We implemented a boosting regression model that tested different values on lambda on the training set, and chose the optimal lambda of 0.1 as the shrinkage value to run our final model but with an rmse of about the same (1.76 years accuracy), the results are about the same as a simpler model. It would make more sense to use a regular regression classification tree in this scenario, as it takes less computational power and produces about the same result.
 
 ```{r}
 ### BOOSTING REGRESSION MODEL
 # boosting model (regression)
 library(gbm)
 set.seed(123) 
-boost_reg <- gbm(IRMJAGE ~ ., data = train,
-    distribution = "gaussian", n.trees = 1000)
+
+# define shrinkage values
+shrinkage_values <- c(0.0001, 0.001, 0.005, 0.01, 0.05, 0.1, 0.2, 0.3, 0.5, 1)
+
+# store training mse
+train_mse <- numeric(length(shrinkage_values))
+
+# loop over shrinkage values
+for (i in seq_along(shrinkage_values)) {
+  lambda <- shrinkage_values[i]
+  
+  boost_model <- gbm(marijuana_first_use_age ~ ., data = train, distribution = "gaussian", n.trees = 1000, shrinkage = lambda)
+  
+  pred_train <- predict(boost_model, newdata = train, n.trees = 1000)
+  
+  train_mse[i] <- mean((pred_train - train$marijuana_first_use_age)^2)
+}
+
+# plot training MSE vs shrinkage
+plot(shrinkage_values, train_mse, type = "b", pch = 19, col = "blue", xlab = "Shrinkage", ylab = "Training MSE", main = "Training MSE vs Shrinkage")
+
+
+## bosting model
+boost_reg <- gbm(marijuana_first_use_age ~ ., data = train,
+    distribution = "gaussian", n.trees = 1000, shrinkage = 0.1)
 summary(boost_reg)
 
 # predict on test data
@@ -414,6 +617,6 @@ yhat.boost <- predict(boost_reg,
     newdata = test, n.trees = 1000)
 
 # mse
-mse <- mean((yhat.boost - test$IRMJAGE)^2)
+mse <- mean((yhat.boost - test$marijuana_first_use_age)^2)
 sqrt(mse)
 ```
